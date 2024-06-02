@@ -8,6 +8,7 @@ let db: Pool =
     host: process.env.PGSQL_HOST,
     port: parseInt(process.env.PGSQL_PORT as string),
     database: process.env.PGSQL_DATABASE,
+    ssl: parseInt(process.env.PGSQL_SSL as string) == 1,
   });
 
 export default db;
