@@ -53,7 +53,7 @@ app.get("/login", async (req: express.Request<{}, {}, {}, LoginQuery>, res) => {
   );
 
   if (lookup.rows.length <= 0) {
-    res.sendStatus(404);
+    res.sendStatus(403);
     return;
   }
 
