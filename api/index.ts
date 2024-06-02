@@ -53,12 +53,12 @@ app.get("/login", async (req: express.Request<{}, {}, {}, LoginQuery>, res) => {
   );
 
   if (lookup.rows.length <= 0) {
-    res.sendStatus(403);
+    res.status(403).send("Invalid login or password");
     return;
   }
 
   if (!bcrypt.compareSync(req.query.password, lookup.rows[0].password_hash)) {
-    res.sendStatus(403);
+    res.status(403).send("Invalid login or password");
     return;
   }
 
@@ -118,7 +118,7 @@ app.get(
     var today = new Date();
     var expiry_date = new Date(new Date().setDate(today.getDate() + 30));
 
-    await db.query(
+    var result = await db.query(
       "INSERT INTO users(name, password_hash, session_token, session_timeout) VALUES ($1, $2, $3, $4)",
       [req.query.name, hash, session_token, expiry_date],
     );
