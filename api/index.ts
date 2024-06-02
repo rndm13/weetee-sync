@@ -12,7 +12,6 @@ import {
 } from "../lib/user";
 
 const app = express();
-// enable JSON body parser
 app.use(bodyParser.raw({ type: "application/octet-stream", limit: "2mb" }));
 
 app.get("/", (req, res) => {
@@ -144,7 +143,7 @@ app.post("/file", async (req: express.Request<{}, {}, {}, FileQuery>, res) => {
   }
 
   if (req.query.file_name == null) {
-    res.status(400).send('{"error": File requires a name}');
+    res.status(400);
     return;
   }
 
@@ -172,7 +171,7 @@ app.get("/file", async (req: express.Request<{}, {}, {}, FileQuery>, res) => {
   }
 
   if (req.query.file_name == null) {
-    res.status(400).send('{"error": "File requires a name"}');
+    res.status(400);
     return;
   }
 
@@ -182,11 +181,38 @@ app.get("/file", async (req: express.Request<{}, {}, {}, FileQuery>, res) => {
   );
 
   if (result.rows.length <= 0) {
-    res.status(404).send('{"error": "File not found"}');
+    res.status(404);
     return;
   }
 
   res.send(result.rows[0].data);
+});
+
+interface FileListQuery {
+  session_token: string;
+}
+
+app.get("/file-list", async (req: express.Request<{}, {}, {}, FileListQuery>, res) => {
+  var user = await user_lookup(req.query.session_token);
+  if (
+    user == UserLookupError.NotFound ||
+    user == UserLookupError.ExpiredSession
+  ) {
+    res.sendStatus(403);
+    return;
+  }
+
+  var result = await db.query(
+    "SELECT name FROM files WHERE owner_id = $1",
+    [user.id],
+  );
+
+  if (result.rows.length <= 0) {
+    res.status(404);
+    return;
+  }
+
+  res.contentType("application/json").send(result.rows);
 });
 
 app.listen(3000, () => console.log("Server ready at: http://localhost:3000"));
