@@ -1,6 +1,8 @@
 import db from "./db";
+import express from "express";
 
 import {randomBytes} from "crypto";
+
 export async function generate_session_token(): Promise<string> {
   var session_token = randomBytes(16).toString("base64");
 
@@ -28,6 +30,13 @@ export interface UserData {
 export enum UserLookupError {
   NotFound,
   ExpiredSession,
+}
+
+export function get_session_token(request: express.Request<{}, {}, {}, any>) {
+    if (request.query.session_token != null) {
+        return request.query.session_token;
+    }
+    return request.cookies["session_token"];
 }
 
 export async function user_lookup(

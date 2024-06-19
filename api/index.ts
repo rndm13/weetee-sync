@@ -3,15 +3,19 @@ import express from "express";
 import db from "../lib/db";
 
 var bodyParser = require("body-parser");
+const cookieParser = require("cookie-parser");
+
 var bcrypt = require("bcryptjs");
 import {
   user_lookup,
+  get_session_token,
   generate_session_token,
   UserLookupError,
   UserData,
 } from "../lib/user";
 
 const app = express();
+app.use(cookieParser());
 app.use(bodyParser.raw({ type: "application/octet-stream", limit: "2mb" }));
 
 app.get("/", (req, res) => {
@@ -64,23 +68,22 @@ app.get("/login", async (req: express.Request<{}, {}, {}, LoginQuery>, res) => {
 
   var today = new Date();
   var expiry_date = new Date(new Date().setDate(today.getDate() + 1));
-  if (req.query.remember_me) {
+  if (req.query.remember_me == true) {
     expiry_date = new Date(new Date().setDate(today.getDate() + 30));
   }
 
   var session_token = await generate_session_token();
 
-  db.query(
-    `
+  db.query(`
     UPDATE users SET
       session_token = $2,
       session_timeout = $3
     WHERE id = $1
-  `,
-    [lookup.rows[0].id, session_token, expiry_date],
-  );
+  `, [lookup.rows[0].id, session_token, expiry_date]);
 
-  res.send(session_token);
+  res
+    .cookie("session_token", session_token, { expires: expiry_date })
+    .send(session_token);
 });
 
 interface LogoutQuery {
@@ -123,7 +126,9 @@ app.get(
       [req.query.name, hash, session_token, expiry_date],
     );
 
-    res.send(session_token);
+    res
+      .cookie("session_token", session_token, { expires: expiry_date })
+      .send(session_token);
   },
 );
 
@@ -133,7 +138,7 @@ interface FileQuery {
 }
 
 app.post("/file", async (req: express.Request<{}, {}, {}, FileQuery>, res) => {
-  var user = await user_lookup(req.query.session_token);
+  var user = await user_lookup(get_session_token(req));
   if (
     user == UserLookupError.NotFound ||
     user == UserLookupError.ExpiredSession
@@ -161,7 +166,7 @@ app.post("/file", async (req: express.Request<{}, {}, {}, FileQuery>, res) => {
 });
 
 app.get("/file", async (req: express.Request<{}, {}, {}, FileQuery>, res) => {
-  var user = await user_lookup(req.query.session_token);
+  var user = await user_lookup(get_session_token(req));
   if (
     user == UserLookupError.NotFound ||
     user == UserLookupError.ExpiredSession
@@ -188,31 +193,114 @@ app.get("/file", async (req: express.Request<{}, {}, {}, FileQuery>, res) => {
   res.send(result.rows[0].data);
 });
 
+interface FileRenameQuery {
+  session_token: string;
+  file_name: string;
+  new_file_name: string;
+}
+
+app.patch(
+  "/file",
+  async (req: express.Request<{}, {}, {}, FileRenameQuery>, res) => {
+    var user = await user_lookup(get_session_token(req));
+    if (
+      user == UserLookupError.NotFound ||
+      user == UserLookupError.ExpiredSession
+    ) {
+      res.sendStatus(403);
+      return;
+    }
+
+    if (req.query.file_name == null) {
+      res.status(400);
+      return;
+    }
+
+    try {
+      var result = await db.query(
+        `
+    UPDATE files SET 
+        name = $3
+    WHERE owner_id = $1 AND name = $2;`,
+        [user.id, req.query.file_name, req.query.new_file_name],
+      );
+    } catch (Exception) {
+      res.sendStatus(400);
+      return;
+    }
+
+    if (result.rowCount == null || result.rowCount <= 0) {
+      res.sendStatus(404);
+      return;
+    }
+
+    res.sendStatus(200);
+  },
+);
+
+app.delete(
+  "/file",
+  async (req: express.Request<{}, {}, {}, FileQuery>, res) => {
+    var user = await user_lookup(get_session_token(req));
+    if (
+      user == UserLookupError.NotFound ||
+      user == UserLookupError.ExpiredSession
+    ) {
+      res.sendStatus(403);
+      return;
+    }
+
+    if (req.query.file_name == null) {
+      res.status(400);
+      return;
+    }
+
+    try {
+      var result = await db.query(
+        `DELETE FROM files WHERE owner_id = $1 AND name = $2;`,
+        [user.id, req.query.file_name],
+      );
+    } catch (Exception) {
+      res.sendStatus(400);
+      return;
+    }
+
+    if (result.rowCount == null || result.rowCount <= 0) {
+      res.sendStatus(404);
+      return;
+    }
+
+    res.sendStatus(200);
+  },
+);
+
 interface FileListQuery {
   session_token: string;
 }
 
-app.get("/file-list", async (req: express.Request<{}, {}, {}, FileListQuery>, res) => {
-  var user = await user_lookup(req.query.session_token);
-  if (
-    user == UserLookupError.NotFound ||
-    user == UserLookupError.ExpiredSession
-  ) {
-    res.sendStatus(403);
-    return;
-  }
+app.get(
+  "/file-list",
+  async (req: express.Request<{}, {}, {}, FileListQuery>, res) => {
+    var user = await user_lookup(get_session_token(req));
+    if (
+      user == UserLookupError.NotFound ||
+      user == UserLookupError.ExpiredSession
+    ) {
+      res.sendStatus(403);
+      return;
+    }
 
-  var result = await db.query(
-    "SELECT name FROM files WHERE owner_id = $1",
-    [user.id],
-  );
+    var result = await db.query("SELECT name FROM files WHERE owner_id = $1", [
+      user.id,
+    ]);
 
-  if (result.rows.length <= 0) {
-    res.status(404);
-    return;
-  }
+    if (result.rows.length <= 0) {
+      res.status(404);
+      return;
+    }
 
-  res.contentType("application/json").send(result.rows);
-});
+    res.contentType("application/json").send(result.rows);
+  },
+);
 
 app.listen(3000, () => console.log("Server ready at: http://localhost:3000"));
