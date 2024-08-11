@@ -41,7 +41,7 @@ app.get("/init-db", async (_, res) => {
             data bytea NOT NULL
         );
     `);
-  res.sendStatus(200);
+  res.status(200).send();
 });
 
 interface LoginQuery {
@@ -74,12 +74,15 @@ app.get("/login", async (req: express.Request<{}, {}, {}, LoginQuery>, res) => {
 
   var session_token = await generate_session_token();
 
-  db.query(`
+  db.query(
+    `
     UPDATE users SET
       session_token = $2,
       session_timeout = $3
     WHERE id = $1
-  `, [lookup.rows[0].id, session_token, expiry_date]);
+  `,
+    [lookup.rows[0].id, session_token, expiry_date],
+  );
 
   res
     .cookie("session_token", session_token, { expires: expiry_date })
@@ -101,7 +104,7 @@ app.get(
       WHERE session_token = $1`,
       [req.query.session_token],
     );
-    res.sendStatus(200);
+    res.status(200).send();
   },
 );
 
@@ -143,12 +146,13 @@ app.post("/file", async (req: express.Request<{}, {}, {}, FileQuery>, res) => {
     user == UserLookupError.NotFound ||
     user == UserLookupError.ExpiredSession
   ) {
-    res.sendStatus(403);
+    res.status(403).send();
     return;
   }
 
   if (req.query.file_name == null) {
-    res.status(400);
+    console.log("POST", "/file", user.name, "file string empty");
+    res.status(400).send();
     return;
   }
 
@@ -162,7 +166,8 @@ app.post("/file", async (req: express.Request<{}, {}, {}, FileQuery>, res) => {
     [user.id, req.query.file_name, req.body],
   );
 
-  res.sendStatus(200);
+  console.log("POST", "/file", user.name, "successfully updated his file", req.query.file_name);
+  res.status(200).send();
 });
 
 app.get("/file", async (req: express.Request<{}, {}, {}, FileQuery>, res) => {
@@ -171,12 +176,13 @@ app.get("/file", async (req: express.Request<{}, {}, {}, FileQuery>, res) => {
     user == UserLookupError.NotFound ||
     user == UserLookupError.ExpiredSession
   ) {
-    res.sendStatus(403);
+    res.status(403).send();
     return;
   }
 
   if (req.query.file_name == null) {
-    res.status(400);
+    console.log("GET", "/file", user.name, "file string empty");
+    res.status(400).send();
     return;
   }
 
@@ -186,10 +192,12 @@ app.get("/file", async (req: express.Request<{}, {}, {}, FileQuery>, res) => {
   );
 
   if (result.rows.length <= 0) {
-    res.status(404);
+    console.log("GET", "/file", user.name, "file not found", req.query.file_name);
+    res.status(404).send();
     return;
   }
 
+  console.log("GET", "/file", user.name, "successfully got his file", req.query.file_name);
   res.send(result.rows[0].data);
 });
 
@@ -207,12 +215,19 @@ app.patch(
       user == UserLookupError.NotFound ||
       user == UserLookupError.ExpiredSession
     ) {
-      res.sendStatus(403);
+      res.status(403).send();
       return;
     }
 
     if (req.query.file_name == null) {
-      res.status(400);
+      console.log("PATCH", "/file", user.name, "old file string empty");
+      res.status(400).send();
+      return;
+    }
+
+    if (req.query.new_file_name == null) {
+      console.log("PATCH", "/file", user.name, "new file string empty");
+      res.status(400).send();
       return;
     }
 
@@ -225,16 +240,25 @@ app.patch(
         [user.id, req.query.file_name, req.query.new_file_name],
       );
     } catch (Exception) {
-      res.sendStatus(400);
+      res.status(400).send();
       return;
     }
 
     if (result.rowCount == null || result.rowCount <= 0) {
-      res.sendStatus(404);
+      console.log("PATCH", "/file", user.name, "didn't rename anything");
+      res.status(404).send();
       return;
     }
 
-    res.sendStatus(200);
+    console.log(
+      "PATCH", "/file",
+      user.name,
+      "successfully renamed",
+      req.query.file_name,
+      "to",
+      req.query.new_file_name,
+    );
+    res.status(200).send();
   },
 );
 
@@ -246,12 +270,13 @@ app.delete(
       user == UserLookupError.NotFound ||
       user == UserLookupError.ExpiredSession
     ) {
-      res.sendStatus(403);
+      res.status(403).send();
       return;
     }
 
     if (req.query.file_name == null) {
-      res.status(400);
+      console.log("DELETE", "/file", user.name, "file string is empty");
+      res.status(400).send();
       return;
     }
 
@@ -261,16 +286,29 @@ app.delete(
         [user.id, req.query.file_name],
       );
     } catch (Exception) {
-      res.sendStatus(400);
+      console.log(
+        "DELETE", "/file",
+        user.name,
+        "failed to delete",
+        req.query.file_name,
+      );
+      res.status(400).send();
       return;
     }
 
     if (result.rowCount == null || result.rowCount <= 0) {
-      res.sendStatus(404);
+      console.log("DELETE", "/file", user.name, "deleted nothing");
+      res.status(404).send();
       return;
     }
 
-    res.sendStatus(200);
+    console.log(
+      "DELETE", "/file",
+      user.name,
+      "successfully deleted",
+      req.query.file_name,
+    );
+    res.status(200).send();
   },
 );
 
@@ -286,7 +324,7 @@ app.get(
       user == UserLookupError.NotFound ||
       user == UserLookupError.ExpiredSession
     ) {
-      res.sendStatus(403);
+      res.status(403).send();
       return;
     }
 
@@ -294,11 +332,13 @@ app.get(
       user.id,
     ]);
 
-    if (result.rows.length <= 0) {
-      res.status(404);
-      return;
-    }
+    // if (result.rows.length <= 0) {
+    //   console.log("GET /file-list", user.name, "doesn't have any files");
+    //   res.status(404).send();
+    //   return;
+    // }
 
+    console.log("GET", "/file-list", user.name, "received a list of their files");
     res.contentType("application/json").send(result.rows);
   },
 );
