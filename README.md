@@ -4,11 +4,20 @@ An API that allows for user auth and file saving.
 
 ## Installation
 
+Install this repo on your computer and all dependencies.
+
 ```sh
 $ git clone https://github.com/rndm13/weetee-sync.git
 $ cd weetee-sync
 $ npm i
 $ npx tsx watch api/
+```
+
+Copy `.env.example` and edit it.
+
+```sh 
+$ cp .env.example .env
+$ vim .env
 ```
 
 ## Endpoints
