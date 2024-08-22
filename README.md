@@ -10,7 +10,6 @@ Install this repo on your computer and all dependencies.
 $ git clone https://github.com/rndm13/weetee-sync.git
 $ cd weetee-sync
 $ npm i
-$ npx tsx watch api/
 ```
 
 Copy `.env.example` and edit it.
@@ -18,6 +17,12 @@ Copy `.env.example` and edit it.
 ```sh 
 $ cp .env.example .env
 $ vim .env
+```
+
+Run the project.
+
+```sh
+$ npx tsx watch api/
 ```
 
 ## Endpoints
